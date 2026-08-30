@@ -2,7 +2,7 @@ import os
 
 import psycopg2
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -40,6 +40,11 @@ class Delivery(BaseModel):
     address: str
     product: str
     status: str = "pending"
+
+
+# Status update model
+class StatusUpdate(BaseModel):
+    status: str
 
 
 # PostgreSQL connection
@@ -150,6 +155,77 @@ def create_delivery(delivery: Delivery):
 
     return {
         "message": "Delivery created successfully",
+        "delivery": {
+            "id": row[0],
+            "customer_name": row[1],
+            "address": row[2],
+            "product": row[3],
+            "status": row[4],
+            "created_at": row[5]
+        }
+    }
+
+
+# Update delivery status
+@app.patch("/deliveries/{delivery_id}/status")
+def update_delivery_status(
+    delivery_id: int,
+    status_update: StatusUpdate
+):
+
+    allowed_statuses = [
+        "pending",
+        "processing",
+        "out_for_delivery",
+        "delivered"
+    ]
+
+    if status_update.status not in allowed_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "Invalid delivery status",
+                "allowed_statuses": allowed_statuses
+            }
+        )
+
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        UPDATE deliveries
+        SET status = %s
+        WHERE id = %s
+        RETURNING
+            id,
+            customer_name,
+            address,
+            product,
+            status,
+            created_at
+    """, (
+        status_update.status,
+        delivery_id
+    ))
+
+    row = cursor.fetchone()
+
+    if row is None:
+        cursor.close()
+        connection.close()
+
+        raise HTTPException(
+            status_code=404,
+            detail="Delivery not found"
+        )
+
+    connection.commit()
+
+    cursor.close()
+    connection.close()
+
+    return {
+        "message": "Delivery status updated successfully",
         "delivery": {
             "id": row[0],
             "customer_name": row[1],
