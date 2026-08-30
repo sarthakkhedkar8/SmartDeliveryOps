@@ -1,7 +1,18 @@
+import os
+
+import psycopg2
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+
 class DeliveryPredictionAgent:
 
     def predict(self, delivery):
-        status = delivery.get("status", "pending")
+        status = delivery["status"]
 
         if status == "delivered":
             risk = "LOW"
@@ -20,27 +31,75 @@ class DeliveryPredictionAgent:
             delay_probability = 50
 
         return {
-            "delivery_id": delivery.get("id"),
+            "delivery_id": delivery["id"],
+            "customer_name": delivery["customer_name"],
+            "product": delivery["product"],
+            "status": status,
             "risk": risk,
             "delay_probability": delay_probability,
-            "status": status
         }
+
+
+def get_deliveries_from_database():
+
+    connection = psycopg2.connect(DATABASE_URL)
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT
+            id,
+            customer_name,
+            product,
+            status
+        FROM deliveries
+        ORDER BY id
+    """)
+
+    rows = cursor.fetchall()
+
+    cursor.close()
+    connection.close()
+
+    deliveries = []
+
+    for row in rows:
+        deliveries.append({
+            "id": row[0],
+            "customer_name": row[1],
+            "product": row[2],
+            "status": row[3],
+        })
+
+    return deliveries
 
 
 if __name__ == "__main__":
 
     agent = DeliveryPredictionAgent()
 
-    test_delivery = {
-        "id": 1,
-        "status": "processing"
-    }
+    deliveries = get_deliveries_from_database()
 
-    prediction = agent.predict(test_delivery)
+    print()
+    print("======================================")
+    print(" SmartDeliveryOps AI Prediction Agent")
+    print("======================================")
+    print()
 
-    print("Delivery Prediction")
-    print("--------------------")
-    print(f"Delivery ID: {prediction['delivery_id']}")
-    print(f"Status: {prediction['status']}")
-    print(f"Risk: {prediction['risk']}")
-    print(f"Delay Probability: {prediction['delay_probability']}%")
+    for delivery in deliveries:
+
+        prediction = agent.predict(delivery)
+
+        print(
+            f"Delivery #{prediction['delivery_id']} | "
+            f"{prediction['customer_name']} | "
+            f"{prediction['product']}"
+        )
+
+        print(
+            f"Status: {prediction['status']} | "
+            f"Risk: {prediction['risk']} | "
+            f"Delay Probability: "
+            f"{prediction['delay_probability']}%"
+        )
+
+        print("--------------------------------------")

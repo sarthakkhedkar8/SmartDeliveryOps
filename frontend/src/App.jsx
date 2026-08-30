@@ -3,17 +3,13 @@ import "./App.css";
 
 const API_URL = "http://localhost:8001";
 
-const STATUS_OPTIONS = [
-  "pending",
-  "processing",
-  "out_for_delivery",
-  "delivered",
-];
-
 function App() {
   const [deliveries, setDeliveries] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [updatingId, setUpdatingId] = useState(null);
+
+  // AI Prediction states
+  const [predictions, setPredictions] = useState([]);
+  const [aiLoading, setAiLoading] = useState(true);
 
   const [form, setForm] = useState({
     customer_name: "",
@@ -22,6 +18,7 @@ function App() {
     status: "pending",
   });
 
+  // Fetch deliveries
   const fetchDeliveries = async () => {
     try {
       const response = await fetch(`${API_URL}/deliveries`);
@@ -31,6 +28,7 @@ function App() {
       }
 
       const data = await response.json();
+
       setDeliveries(data.deliveries || []);
     } catch (error) {
       console.error("Failed to fetch deliveries:", error);
@@ -39,10 +37,32 @@ function App() {
     }
   };
 
+  // Fetch AI predictions
+  const fetchPredictions = async () => {
+    try {
+      const response = await fetch(`${API_URL}/ai/predictions`);
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch AI predictions");
+      }
+
+      const data = await response.json();
+
+      setPredictions(data.predictions || []);
+    } catch (error) {
+      console.error("Failed to fetch AI predictions:", error);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // Initial data loading
   useEffect(() => {
     fetchDeliveries();
+    fetchPredictions();
   }, []);
 
+  // Form input handler
   const handleChange = (event) => {
     setForm({
       ...form,
@@ -50,6 +70,7 @@ function App() {
     });
   };
 
+  // Create delivery
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -74,15 +95,17 @@ function App() {
       });
 
       await fetchDeliveries();
+      await fetchPredictions();
+
+      alert("Delivery created successfully!");
     } catch (error) {
       console.error("Failed to create delivery:", error);
       alert("Could not create delivery");
     }
   };
 
+  // Update delivery status
   const updateStatus = async (deliveryId, newStatus) => {
-    setUpdatingId(deliveryId);
-
     try {
       const response = await fetch(
         `${API_URL}/deliveries/${deliveryId}/status`,
@@ -98,18 +121,19 @@ function App() {
       );
 
       if (!response.ok) {
-        throw new Error("Failed to update delivery status");
+        throw new Error("Failed to update status");
       }
 
       await fetchDeliveries();
+      await fetchPredictions();
+
     } catch (error) {
       console.error("Failed to update status:", error);
       alert("Could not update delivery status");
-    } finally {
-      setUpdatingId(null);
     }
   };
 
+  // Statistics
   const pendingCount = deliveries.filter(
     (delivery) => delivery.status === "pending"
   ).length;
@@ -118,23 +142,26 @@ function App() {
     (delivery) => delivery.status === "processing"
   ).length;
 
-  const outForDeliveryCount = deliveries.filter(
-    (delivery) => delivery.status === "out_for_delivery"
-  ).length;
-
   const deliveredCount = deliveries.filter(
     (delivery) => delivery.status === "delivered"
   ).length;
 
-  const formatStatus = (status) => {
-    return status
-      .split("_")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ");
-  };
+  const highRiskCount = predictions.filter(
+    (prediction) => prediction.risk === "HIGH"
+  ).length;
+
+  const mediumRiskCount = predictions.filter(
+    (prediction) => prediction.risk === "MEDIUM"
+  ).length;
+
+  const lowRiskCount = predictions.filter(
+    (prediction) => prediction.risk === "LOW"
+  ).length;
 
   return (
     <div className="app">
+
+      {/* Header */}
       <header className="header">
         <div>
           <h1>SmartDeliveryOps</h1>
@@ -148,7 +175,10 @@ function App() {
       </header>
 
       <main className="container">
+
+        {/* Statistics */}
         <section className="stats">
+
           <div className="card">
             <h3>Total Deliveries</h3>
             <strong>{deliveries.length}</strong>
@@ -165,21 +195,22 @@ function App() {
           </div>
 
           <div className="card">
-            <h3>Out for Delivery</h3>
-            <strong>{outForDeliveryCount}</strong>
-          </div>
-
-          <div className="card">
             <h3>Delivered</h3>
             <strong>{deliveredCount}</strong>
           </div>
+
         </section>
 
+        {/* Main content */}
         <section className="content-grid">
+
+          {/* Add Delivery */}
           <div className="panel">
+
             <h2>Add Delivery</h2>
 
             <form onSubmit={handleSubmit}>
+
               <label>Customer Name</label>
 
               <input
@@ -217,34 +248,57 @@ function App() {
                 value={form.status}
                 onChange={handleChange}
               >
-                {STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {formatStatus(status)}
-                  </option>
-                ))}
+                <option value="pending">Pending</option>
+                <option value="processing">Processing</option>
+                <option value="out_for_delivery">
+                  Out for Delivery
+                </option>
+                <option value="delivered">Delivered</option>
               </select>
 
-              <button type="submit">Create Delivery</button>
+              <button type="submit">
+                Create Delivery
+              </button>
+
             </form>
+
           </div>
 
+          {/* Delivery List */}
           <div className="panel">
+
             <div className="panel-header">
+
               <h2>Delivery List</h2>
 
-              <button className="refresh" onClick={fetchDeliveries}>
+              <button
+                className="refresh"
+                onClick={() => {
+                  fetchDeliveries();
+                  fetchPredictions();
+                }}
+              >
                 Refresh
               </button>
+
             </div>
 
             {loading ? (
+
               <p>Loading deliveries...</p>
+
             ) : deliveries.length === 0 ? (
+
               <p>No deliveries found.</p>
+
             ) : (
+
               <div className="table-wrapper">
+
                 <table>
+
                   <thead>
+
                     <tr>
                       <th>ID</th>
                       <th>Customer</th>
@@ -252,11 +306,15 @@ function App() {
                       <th>Product</th>
                       <th>Status</th>
                     </tr>
+
                   </thead>
 
                   <tbody>
+
                     {deliveries.map((delivery) => (
+
                       <tr key={delivery.id}>
+
                         <td>{delivery.id}</td>
 
                         <td>{delivery.customer_name}</td>
@@ -266,10 +324,9 @@ function App() {
                         <td>{delivery.product}</td>
 
                         <td>
+
                           <select
-                            className={`status-select ${delivery.status}`}
                             value={delivery.status}
-                            disabled={updatingId === delivery.id}
                             onChange={(event) =>
                               updateStatus(
                                 delivery.id,
@@ -277,22 +334,168 @@ function App() {
                               )
                             }
                           >
-                            {STATUS_OPTIONS.map((status) => (
-                              <option key={status} value={status}>
-                                {formatStatus(status)}
-                              </option>
-                            ))}
+
+                            <option value="pending">
+                              Pending
+                            </option>
+
+                            <option value="processing">
+                              Processing
+                            </option>
+
+                            <option value="out_for_delivery">
+                              Out for Delivery
+                            </option>
+
+                            <option value="delivered">
+                              Delivered
+                            </option>
+
                           </select>
+
                         </td>
+
                       </tr>
+
                     ))}
+
                   </tbody>
+
                 </table>
+
               </div>
+
             )}
+
           </div>
+
         </section>
+
+        {/* AI Risk Summary */}
+        <section className="stats ai-stats">
+
+          <div className="card">
+            <h3>🤖 High Risk</h3>
+            <strong>{highRiskCount}</strong>
+          </div>
+
+          <div className="card">
+            <h3>⚠️ Medium Risk</h3>
+            <strong>{mediumRiskCount}</strong>
+          </div>
+
+          <div className="card">
+            <h3>✅ Low Risk</h3>
+            <strong>{lowRiskCount}</strong>
+          </div>
+
+        </section>
+
+        {/* AI Predictions */}
+        <section className="panel ai-panel">
+
+          <div className="panel-header">
+
+            <div>
+              <h2>🤖 AI Delivery Predictions</h2>
+
+              <p>
+                AI-based delivery risk analysis
+              </p>
+            </div>
+
+            <button
+              className="refresh"
+              onClick={fetchPredictions}
+            >
+              Refresh AI
+            </button>
+
+          </div>
+
+          {aiLoading ? (
+
+            <p>Loading AI predictions...</p>
+
+          ) : predictions.length === 0 ? (
+
+            <p>No AI predictions available.</p>
+
+          ) : (
+
+            <div className="table-wrapper">
+
+              <table>
+
+                <thead>
+
+                  <tr>
+                    <th>ID</th>
+                    <th>Customer</th>
+                    <th>Product</th>
+                    <th>Status</th>
+                    <th>Risk</th>
+                    <th>Delay Probability</th>
+                  </tr>
+
+                </thead>
+
+                <tbody>
+
+                  {predictions.map((prediction) => (
+
+                    <tr key={prediction.delivery_id}>
+
+                      <td>
+                        {prediction.delivery_id}
+                      </td>
+
+                      <td>
+                        {prediction.customer_name}
+                      </td>
+
+                      <td>
+                        {prediction.product}
+                      </td>
+
+                      <td>
+                        {prediction.status}
+                      </td>
+
+                      <td>
+
+                        <span
+                          className={`risk ${prediction.risk.toLowerCase()}`}
+                        >
+                          {prediction.risk}
+                        </span>
+
+                      </td>
+
+                      <td>
+
+                        <strong>
+                          {prediction.delay_probability}%
+                        </strong>
+
+                      </td>
+
+                    </tr>
+
+                  ))}
+
+                </tbody>
+
+              </table>
+
+            </div>
+
+          )}
+
+        </section>
+
       </main>
+
     </div>
   );
 }
