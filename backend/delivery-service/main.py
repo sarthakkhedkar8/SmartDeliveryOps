@@ -235,3 +235,65 @@ def update_delivery_status(
             "created_at": row[5]
         }
     }
+
+
+# AI Prediction endpoint
+@app.get("/ai/predictions")
+def get_ai_predictions():
+
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT
+            id,
+            customer_name,
+            product,
+            status
+        FROM deliveries
+        ORDER BY id
+    """)
+
+    rows = cursor.fetchall()
+
+    cursor.close()
+    connection.close()
+
+    predictions = []
+
+    for row in rows:
+
+        delivery_id = row[0]
+        customer_name = row[1]
+        product = row[2]
+        status = row[3]
+
+        if status == "delivered":
+            risk = "LOW"
+            delay_probability = 0
+
+        elif status == "out_for_delivery":
+            risk = "LOW"
+            delay_probability = 10
+
+        elif status == "processing":
+            risk = "MEDIUM"
+            delay_probability = 30
+
+        else:
+            risk = "HIGH"
+            delay_probability = 50
+
+        predictions.append({
+            "delivery_id": delivery_id,
+            "customer_name": customer_name,
+            "product": product,
+            "status": status,
+            "risk": risk,
+            "delay_probability": delay_probability
+        })
+
+    return {
+        "count": len(predictions),
+        "predictions": predictions
+    }
