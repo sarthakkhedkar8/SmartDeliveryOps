@@ -7,34 +7,27 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 
-# Load environment variables
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-
-# Create FastAPI application
 app = FastAPI(
     title="SmartDeliveryOps Delivery Service",
-    description="Smart Delivery Management API",
     version="1.0.0"
 )
 
 
-# Enable CORS for React frontend
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173"
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# Delivery request model
+# Delivery model
 class Delivery(BaseModel):
     customer_name: str
     address: str
@@ -49,29 +42,38 @@ class StatusUpdate(BaseModel):
 
 # PostgreSQL connection
 def get_db_connection():
+    if not DATABASE_URL:
+        raise Exception("DATABASE_URL is not configured")
+
     return psycopg2.connect(DATABASE_URL)
 
 
-# Root endpoint
-@app.get("/")
-def root():
-    return {
-        "service": "delivery-service",
-        "project": "SmartDeliveryOps",
-        "status": "running"
-    }
-
-
-# Health check endpoint
+# Health check
 @app.get("/health")
-def health():
-    connection = get_db_connection()
-    connection.close()
+def health_check():
 
-    return {
-        "status": "healthy",
-        "database": "connected"
-    }
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT 1")
+        cursor.fetchone()
+
+        cursor.close()
+        connection.close()
+
+        return {
+            "status": "healthy",
+            "database": "connected"
+        }
+
+    except Exception as error:
+
+        return {
+            "status": "unhealthy",
+            "database": "disconnected",
+            "error": str(error)
+        }
 
 
 # Get all deliveries
@@ -101,6 +103,7 @@ def get_deliveries():
     deliveries = []
 
     for row in rows:
+
         deliveries.append({
             "id": row[0],
             "customer_name": row[1],
@@ -116,7 +119,47 @@ def get_deliveries():
     }
 
 
-# Create new delivery
+# Get single delivery
+@app.get("/deliveries/{delivery_id}")
+def get_delivery(delivery_id: int):
+
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT
+            id,
+            customer_name,
+            address,
+            product,
+            status,
+            created_at
+        FROM deliveries
+        WHERE id = %s
+    """, (delivery_id,))
+
+    row = cursor.fetchone()
+
+    cursor.close()
+    connection.close()
+
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail="Delivery not found"
+        )
+
+    return {
+        "id": row[0],
+        "customer_name": row[1],
+        "address": row[2],
+        "product": row[3],
+        "status": row[4],
+        "created_at": row[5]
+    }
+
+
+# Create delivery
 @app.post("/deliveries")
 def create_delivery(delivery: Delivery):
 
@@ -124,8 +167,7 @@ def create_delivery(delivery: Delivery):
     cursor = connection.cursor()
 
     cursor.execute("""
-        INSERT INTO deliveries
-        (
+        INSERT INTO deliveries (
             customer_name,
             address,
             product,
@@ -154,15 +196,12 @@ def create_delivery(delivery: Delivery):
     connection.close()
 
     return {
-        "message": "Delivery created successfully",
-        "delivery": {
-            "id": row[0],
-            "customer_name": row[1],
-            "address": row[2],
-            "product": row[3],
-            "status": row[4],
-            "created_at": row[5]
-        }
+        "id": row[0],
+        "customer_name": row[1],
+        "address": row[2],
+        "product": row[3],
+        "status": row[4],
+        "created_at": row[5]
     }
 
 
@@ -177,7 +216,8 @@ def update_delivery_status(
         "pending",
         "processing",
         "out_for_delivery",
-        "delivered"
+        "delivered",
+        "cancelled"
     ]
 
     if status_update.status not in allowed_statuses:
@@ -210,7 +250,8 @@ def update_delivery_status(
 
     row = cursor.fetchone()
 
-    if row is None:
+    if not row:
+        connection.rollback()
         cursor.close()
         connection.close()
 
@@ -225,15 +266,12 @@ def update_delivery_status(
     connection.close()
 
     return {
-        "message": "Delivery status updated successfully",
-        "delivery": {
-            "id": row[0],
-            "customer_name": row[1],
-            "address": row[2],
-            "product": row[3],
-            "status": row[4],
-            "created_at": row[5]
-        }
+        "id": row[0],
+        "customer_name": row[1],
+        "address": row[2],
+        "product": row[3],
+        "status": row[4],
+        "created_at": row[5]
     }
 
 
@@ -269,18 +307,22 @@ def get_ai_predictions():
         status = row[3]
 
         if status == "delivered":
+
             risk = "LOW"
             delay_probability = 0
 
         elif status == "out_for_delivery":
+
             risk = "LOW"
             delay_probability = 10
 
         elif status == "processing":
+
             risk = "MEDIUM"
             delay_probability = 30
 
         else:
+
             risk = "HIGH"
             delay_probability = 50
 
