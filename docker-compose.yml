@@ -16,6 +16,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql
 
+
   backend:
     image: smartdeliveryops-backend:latest
     container_name: smartdeliveryops-backend
@@ -29,6 +30,19 @@ services:
 
     depends_on:
       - postgres
+
+
+  frontend:
+    image: smartdeliveryops-frontend:latest
+    container_name: smartdeliveryops-frontend
+    restart: unless-stopped
+
+    ports:
+      - "5173:5173"
+
+    depends_on:
+      - backend
+
 
 volumes:
   postgres_data:
