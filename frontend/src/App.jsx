@@ -5,11 +5,11 @@ const API_URL = "http://localhost:8001";
 
 function App() {
   const [deliveries, setDeliveries] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  // AI Prediction states
   const [predictions, setPredictions] = useState([]);
+
+  const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(true);
+  const [apiConnected, setApiConnected] = useState(false);
 
   const [form, setForm] = useState({
     customer_name: "",
@@ -18,7 +18,10 @@ function App() {
     status: "pending",
   });
 
-  // Fetch deliveries
+  // ==============================
+  // Fetch Deliveries
+  // ==============================
+
   const fetchDeliveries = async () => {
     try {
       const response = await fetch(`${API_URL}/deliveries`);
@@ -30,16 +33,23 @@ function App() {
       const data = await response.json();
 
       setDeliveries(data.deliveries || []);
+      setApiConnected(true);
     } catch (error) {
       console.error("Failed to fetch deliveries:", error);
+      setApiConnected(false);
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch AI predictions
+  // ==============================
+  // Fetch AI Predictions
+  // ==============================
+
   const fetchPredictions = async () => {
     try {
+      setAiLoading(true);
+
       const response = await fetch(`${API_URL}/ai/predictions`);
 
       if (!response.ok) {
@@ -49,6 +59,7 @@ function App() {
       const data = await response.json();
 
       setPredictions(data.predictions || []);
+      setApiConnected(true);
     } catch (error) {
       console.error("Failed to fetch AI predictions:", error);
     } finally {
@@ -56,13 +67,29 @@ function App() {
     }
   };
 
-  // Initial data loading
+  // ==============================
+  // Refresh Everything
+  // ==============================
+
+  const refreshAll = async () => {
+    await Promise.all([
+      fetchDeliveries(),
+      fetchPredictions(),
+    ]);
+  };
+
+  // ==============================
+  // Initial Load
+  // ==============================
+
   useEffect(() => {
-    fetchDeliveries();
-    fetchPredictions();
+    refreshAll();
   }, []);
 
-  // Form input handler
+  // ==============================
+  // Form Handler
+  // ==============================
+
   const handleChange = (event) => {
     setForm({
       ...form,
@@ -70,7 +97,10 @@ function App() {
     });
   };
 
-  // Create delivery
+  // ==============================
+  // Create Delivery
+  // ==============================
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -94,8 +124,7 @@ function App() {
         status: "pending",
       });
 
-      await fetchDeliveries();
-      await fetchPredictions();
+      await refreshAll();
 
       alert("Delivery created successfully!");
     } catch (error) {
@@ -104,7 +133,10 @@ function App() {
     }
   };
 
-  // Update delivery status
+  // ==============================
+  // Update Delivery Status
+  // ==============================
+
   const updateStatus = async (deliveryId, newStatus) => {
     try {
       const response = await fetch(
@@ -124,16 +156,19 @@ function App() {
         throw new Error("Failed to update status");
       }
 
-      await fetchDeliveries();
-      await fetchPredictions();
-
+      await refreshAll();
     } catch (error) {
       console.error("Failed to update status:", error);
       alert("Could not update delivery status");
     }
   };
 
-  // Statistics
+  // ==============================
+  // Delivery Statistics
+  // ==============================
+
+  const totalCount = deliveries.length;
+
   const pendingCount = deliveries.filter(
     (delivery) => delivery.status === "pending"
   ).length;
@@ -142,9 +177,17 @@ function App() {
     (delivery) => delivery.status === "processing"
   ).length;
 
+  const outForDeliveryCount = deliveries.filter(
+    (delivery) => delivery.status === "out_for_delivery"
+  ).length;
+
   const deliveredCount = deliveries.filter(
     (delivery) => delivery.status === "delivered"
   ).length;
+
+  // ==============================
+  // AI Statistics
+  // ==============================
 
   const highRiskCount = predictions.filter(
     (prediction) => prediction.risk === "HIGH"
@@ -158,56 +201,100 @@ function App() {
     (prediction) => prediction.risk === "LOW"
   ).length;
 
+  const averageDelayProbability =
+    predictions.length > 0
+      ? Math.round(
+          predictions.reduce(
+            (total, prediction) =>
+              total + prediction.delay_probability,
+            0
+          ) / predictions.length
+        )
+      : 0;
+
   return (
     <div className="app">
 
-      {/* Header */}
+      {/* =========================================
+          HEADER
+      ========================================= */}
+
       <header className="header">
+
         <div>
           <h1>SmartDeliveryOps</h1>
-          <p>Smart Delivery Management Dashboard</p>
+
+          <p>
+            AI-Powered Smart Delivery Management Platform
+          </p>
         </div>
 
-        <div className="api-status">
+        <div
+          className={`api-status ${
+            apiConnected ? "connected" : "disconnected"
+          }`}
+        >
           <span></span>
-          API Connected
+
+          {apiConnected
+            ? "API Connected"
+            : "API Disconnected"}
         </div>
+
       </header>
 
       <main className="container">
 
-        {/* Statistics */}
+        {/* =========================================
+            DELIVERY STATISTICS
+        ========================================= */}
+
         <section className="stats">
 
           <div className="card">
-            <h3>Total Deliveries</h3>
-            <strong>{deliveries.length}</strong>
+            <h3>📦 Total Deliveries</h3>
+            <strong>{totalCount}</strong>
           </div>
 
           <div className="card">
-            <h3>Pending</h3>
+            <h3>⏳ Pending</h3>
             <strong>{pendingCount}</strong>
           </div>
 
           <div className="card">
-            <h3>Processing</h3>
+            <h3>⚙️ Processing</h3>
             <strong>{processingCount}</strong>
           </div>
 
           <div className="card">
-            <h3>Delivered</h3>
+            <h3>🚚 Out for Delivery</h3>
+            <strong>{outForDeliveryCount}</strong>
+          </div>
+
+          <div className="card">
+            <h3>✅ Delivered</h3>
             <strong>{deliveredCount}</strong>
           </div>
 
         </section>
 
-        {/* Main content */}
+        {/* =========================================
+            MAIN GRID
+        ========================================= */}
+
         <section className="content-grid">
 
-          {/* Add Delivery */}
+          {/* =======================================
+              ADD DELIVERY
+          ======================================= */}
+
           <div className="panel">
 
-            <h2>Add Delivery</h2>
+            <h2>➕ Add Delivery</h2>
+
+            <p className="panel-description">
+              Create a new delivery order
+            </p>
 
             <form onSubmit={handleSubmit}>
 
@@ -247,13 +334,23 @@ function App() {
                 name="status"
                 value={form.status}
                 onChange={handleChange}
+                className={`status-select ${form.status}`}
               >
-                <option value="pending">Pending</option>
-                <option value="processing">Processing</option>
+                <option value="pending">
+                  Pending
+                </option>
+
+                <option value="processing">
+                  Processing
+                </option>
+
                 <option value="out_for_delivery">
                   Out for Delivery
                 </option>
-                <option value="delivered">Delivered</option>
+
+                <option value="delivered">
+                  Delivered
+                </option>
               </select>
 
               <button type="submit">
@@ -264,32 +361,42 @@ function App() {
 
           </div>
 
-          {/* Delivery List */}
+          {/* =======================================
+              DELIVERY LIST
+          ======================================= */}
+
           <div className="panel">
 
             <div className="panel-header">
 
-              <h2>Delivery List</h2>
+              <div>
+                <h2>📋 Delivery List</h2>
+
+                <p className="panel-description">
+                  Manage and monitor delivery status
+                </p>
+              </div>
 
               <button
                 className="refresh"
-                onClick={() => {
-                  fetchDeliveries();
-                  fetchPredictions();
-                }}
+                onClick={refreshAll}
               >
-                Refresh
+                🔄 Refresh All
               </button>
 
             </div>
 
             {loading ? (
 
-              <p>Loading deliveries...</p>
+              <div className="loading">
+                Loading deliveries...
+              </div>
 
             ) : deliveries.length === 0 ? (
 
-              <p>No deliveries found.</p>
+              <div className="empty">
+                No deliveries found.
+              </div>
 
             ) : (
 
@@ -315,13 +422,21 @@ function App() {
 
                       <tr key={delivery.id}>
 
-                        <td>{delivery.id}</td>
+                        <td>
+                          <strong>#{delivery.id}</strong>
+                        </td>
 
-                        <td>{delivery.customer_name}</td>
+                        <td>
+                          {delivery.customer_name}
+                        </td>
 
-                        <td>{delivery.address}</td>
+                        <td>
+                          {delivery.address}
+                        </td>
 
-                        <td>{delivery.product}</td>
+                        <td>
+                          {delivery.product}
+                        </td>
 
                         <td>
 
@@ -333,6 +448,7 @@ function App() {
                                 event.target.value
                               )
                             }
+                            className={`status-select ${delivery.status}`}
                           >
 
                             <option value="pending">
@@ -371,36 +487,19 @@ function App() {
 
         </section>
 
-        {/* AI Risk Summary */}
-        <section className="stats ai-stats">
+        {/* =========================================
+            AI RISK SUMMARY
+        ========================================= */}
 
-          <div className="card">
-            <h3>🤖 High Risk</h3>
-            <strong>{highRiskCount}</strong>
-          </div>
+        <section className="ai-section">
 
-          <div className="card">
-            <h3>⚠️ Medium Risk</h3>
-            <strong>{mediumRiskCount}</strong>
-          </div>
-
-          <div className="card">
-            <h3>✅ Low Risk</h3>
-            <strong>{lowRiskCount}</strong>
-          </div>
-
-        </section>
-
-        {/* AI Predictions */}
-        <section className="panel ai-panel">
-
-          <div className="panel-header">
+          <div className="section-title">
 
             <div>
-              <h2>🤖 AI Delivery Predictions</h2>
+              <h2>🤖 AI Risk Intelligence</h2>
 
               <p>
-                AI-based delivery risk analysis
+                Intelligent analysis of delivery delay risks
               </p>
             </div>
 
@@ -408,18 +507,83 @@ function App() {
               className="refresh"
               onClick={fetchPredictions}
             >
-              Refresh AI
+              🔄 Refresh AI
             </button>
+
+          </div>
+
+          <div className="stats ai-stats">
+
+            <div className="card risk-card high-card">
+              <h3>🔴 High Risk</h3>
+              <strong>{highRiskCount}</strong>
+              <span>
+                deliveries need attention
+              </span>
+            </div>
+
+            <div className="card risk-card medium-card">
+              <h3>🟡 Medium Risk</h3>
+              <strong>{mediumRiskCount}</strong>
+              <span>
+                deliveries being monitored
+              </span>
+            </div>
+
+            <div className="card risk-card low-card">
+              <h3>🟢 Low Risk</h3>
+              <strong>{lowRiskCount}</strong>
+              <span>
+                deliveries on track
+              </span>
+            </div>
+
+            <div className="card risk-card">
+              <h3>📊 Avg. Delay Probability</h3>
+              <strong>{averageDelayProbability}%</strong>
+              <span>
+                across all deliveries
+              </span>
+            </div>
+
+          </div>
+
+        </section>
+
+        {/* =========================================
+            AI PREDICTIONS TABLE
+        ========================================= */}
+
+        <section className="panel ai-panel">
+
+          <div className="panel-header">
+
+            <div>
+              <h2>🧠 AI Delivery Predictions</h2>
+
+              <p className="panel-description">
+                AI-based delivery risk and delay analysis
+              </p>
+            </div>
+
+            <div className="ai-status">
+              <span></span>
+              AI Service
+            </div>
 
           </div>
 
           {aiLoading ? (
 
-            <p>Loading AI predictions...</p>
+            <div className="loading">
+              🤖 AI is analyzing deliveries...
+            </div>
 
           ) : predictions.length === 0 ? (
 
-            <p>No AI predictions available.</p>
+            <div className="empty">
+              No AI predictions available.
+            </div>
 
           ) : (
 
@@ -447,7 +611,9 @@ function App() {
                     <tr key={prediction.delivery_id}>
 
                       <td>
-                        {prediction.delivery_id}
+                        <strong>
+                          #{prediction.delivery_id}
+                        </strong>
                       </td>
 
                       <td>
@@ -459,7 +625,14 @@ function App() {
                       </td>
 
                       <td>
-                        {prediction.status}
+                        <span
+                          className={`status-text ${prediction.status}`}
+                        >
+                          {prediction.status.replaceAll(
+                            "_",
+                            " "
+                          )}
+                        </span>
                       </td>
 
                       <td>
@@ -474,9 +647,24 @@ function App() {
 
                       <td>
 
-                        <strong>
-                          {prediction.delay_probability}%
-                        </strong>
+                        <div className="probability">
+
+                          <div className="probability-bar">
+
+                            <div
+                              className={`probability-fill ${prediction.risk.toLowerCase()}`}
+                              style={{
+                                width: `${prediction.delay_probability}%`,
+                              }}
+                            ></div>
+
+                          </div>
+
+                          <strong>
+                            {prediction.delay_probability}%
+                          </strong>
+
+                        </div>
 
                       </td>
 
@@ -495,6 +683,22 @@ function App() {
         </section>
 
       </main>
+
+      {/* =========================================
+          FOOTER
+      ========================================= */}
+
+      <footer className="footer">
+
+        <p>
+          SmartDeliveryOps • AI-Powered Delivery Operations
+        </p>
+
+        <span>
+          Local Microservices Architecture
+        </span>
+
+      </footer>
 
     </div>
   );
