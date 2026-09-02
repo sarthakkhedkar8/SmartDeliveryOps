@@ -13,6 +13,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 echo 'Checking out SmartDeliveryOps source code...'
+
                 checkout scm
             }
         }
@@ -23,10 +24,25 @@ pipeline {
                     echo "========================================="
                     echo " SmartDeliveryOps CI/CD Pipeline"
                     echo "========================================="
+
                     echo "Git Commit:"
                     git log -1 --oneline
+
+                    echo "Git Branch:"
+                    git branch --show-current
+
+                    echo "Python:"
+                    python3 --version
+
+                    echo "Node:"
+                    node --version
+
+                    echo "NPM:"
+                    npm --version
+
                     echo "Docker:"
                     docker --version
+
                     echo "Docker Compose:"
                     docker compose version
                 '''
@@ -38,10 +54,32 @@ pipeline {
                 echo 'Running backend validation...'
 
                 sh '''
-                    python3 --version
+                    echo "Checking backend files..."
+
                     test -f backend/delivery-service/main.py
                     test -f backend/delivery-service/requirements.txt
+                    test -f backend/delivery-service/Dockerfile
+
+                    python3 --version
+
                     echo "Backend files validated successfully."
+                '''
+            }
+        }
+
+        stage('AI Service Test') {
+            steps {
+                echo 'Running AI service validation...'
+
+                sh '''
+                    echo "Checking AI service files..."
+
+                    test -f ai-agents/delivery-prediction-agent/agent.py
+                    test -f ai-agents/delivery-prediction-agent/api.py
+                    test -f ai-agents/delivery-prediction-agent/requirements.txt
+                    test -f ai-agents/delivery-prediction-agent/Dockerfile
+
+                    echo "AI service files validated successfully."
                 '''
             }
         }
@@ -52,9 +90,19 @@ pipeline {
 
                 dir('frontend') {
                     sh '''
+                        echo "Node version:"
+                        node --version
+
+                        echo "NPM version:"
                         npm --version
+
+                        echo "Installing frontend dependencies..."
                         npm install
+
+                        echo "Running frontend production build..."
                         npm run build
+
+                        echo "Frontend build successful."
                     '''
                 }
             }
@@ -68,6 +116,8 @@ pipeline {
                     docker build \
                       -t ${BACKEND_IMAGE} \
                       ./backend/delivery-service
+
+                    echo "Backend Docker image created successfully."
                 '''
             }
         }
@@ -80,6 +130,8 @@ pipeline {
                     docker build \
                       -t ${FRONTEND_IMAGE} \
                       ./frontend
+
+                    echo "Frontend Docker image created successfully."
                 '''
             }
         }
@@ -92,6 +144,22 @@ pipeline {
                     docker build \
                       -t ${AI_IMAGE} \
                       ./ai-agents/delivery-prediction-agent
+
+                    echo "AI Docker image created successfully."
+                '''
+            }
+        }
+
+        stage('Docker Images') {
+            steps {
+                echo 'Checking Docker images...'
+
+                sh '''
+                    echo "========================================="
+                    echo " SmartDeliveryOps Docker Images"
+                    echo "========================================="
+
+                    docker images | grep smartdeliveryops || true
                 '''
             }
         }
@@ -101,7 +169,13 @@ pipeline {
                 echo 'Deploying SmartDeliveryOps...'
 
                 sh '''
-                    docker compose up -d --force-recreate
+                    echo "Using SmartDeliveryOps Compose project..."
+
+                    docker compose \
+                      -p smartdeliveryops \
+                      up -d --force-recreate
+
+                    echo "Deployment command completed."
                 '''
             }
         }
@@ -111,18 +185,38 @@ pipeline {
                 echo 'Checking SmartDeliveryOps services...'
 
                 sh '''
+                    echo "Waiting for services to start..."
                     sleep 10
 
-                    echo "Checking Backend..."
+                    echo ""
+                    echo "========================================="
+                    echo " Backend Health Check"
+                    echo "========================================="
+
                     curl -f http://localhost:8001/health
 
                     echo ""
-                    echo "Checking AI Service..."
+                    echo "Backend is healthy."
+
+                    echo ""
+                    echo "========================================="
+                    echo " AI Service Health Check"
+                    echo "========================================="
+
                     curl -f http://localhost:8002/health
 
                     echo ""
-                    echo "Checking Frontend..."
+                    echo "AI service is healthy."
+
+                    echo ""
+                    echo "========================================="
+                    echo " Frontend Health Check"
+                    echo "========================================="
+
                     curl -f http://localhost:5173
+
+                    echo ""
+                    echo "Frontend is healthy."
 
                     echo ""
                     echo "========================================="
@@ -131,27 +225,63 @@ pipeline {
                 '''
             }
         }
+
+        stage('Final Container Check') {
+            steps {
+                echo 'Checking running containers...'
+
+                sh '''
+                    echo "========================================="
+                    echo " Running SmartDeliveryOps Containers"
+                    echo "========================================="
+
+                    docker ps \
+                      --filter "name=smartdeliveryops" \
+                      --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"
+                '''
+            }
+        }
     }
 
     post {
 
         success {
-            echo '========================================='
-            echo ' CI/CD PIPELINE SUCCESSFUL'
-            echo '========================================='
+            echo '''
+=========================================
+ CI/CD PIPELINE SUCCESSFUL
+=========================================
+ SmartDeliveryOps has been successfully
+ built, deployed and health-checked.
+=========================================
+'''
         }
 
         failure {
-            echo '========================================='
-            echo ' CI/CD PIPELINE FAILED'
-            echo 'Check Jenkins console output.'
-            echo '========================================='
+            echo '''
+=========================================
+ CI/CD PIPELINE FAILED
+=========================================
+Please check the Jenkins Console Output
+for the failed stage and error.
+=========================================
+'''
         }
 
         always {
             sh '''
-                echo "Running containers:"
-                docker ps
+                echo ""
+                echo "========================================="
+                echo " Docker Containers After Pipeline"
+                echo "========================================="
+
+                docker ps \
+                  --filter "name=smartdeliveryops" \
+                  --format "table {{.Names}}\\t{{.Image}}\\t{{.Status}}\\t{{.Ports}}" || true
+
+                echo ""
+                echo "========================================="
+                echo " Pipeline Finished"
+                echo "========================================="
             '''
         }
     }
