@@ -44,5 +44,22 @@ services:
       - backend
 
 
+  ai-prediction:
+    build:
+      context: ./ai-agents/delivery-prediction-agent
+
+    container_name: smartdeliveryops-ai-prediction
+    restart: unless-stopped
+
+    environment:
+      DATABASE_URL: postgresql://smartdelivery:[REDACTED-OLD-DB-PASSWORD]@postgres:5432/smartdeliveryops
+
+    ports:
+      - "8002:8002"
+
+    depends_on:
+      - postgres
+
+
 volumes:
   postgres_data:
