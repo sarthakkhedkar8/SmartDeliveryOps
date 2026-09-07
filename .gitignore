@@ -15,3 +15,5 @@ minikube-linux-arm64
 minikube-linux-arm64
 minikube-linux-arm64
 ai-model/.venv/
+frontend/src/*.backup
+*.day15.backup
