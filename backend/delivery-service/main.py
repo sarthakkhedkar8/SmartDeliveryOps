@@ -285,63 +285,30 @@ def update_delivery_status(
 @app.get("/ai/predictions")
 def get_ai_predictions():
 
-    connection = get_db_connection()
-    cursor = connection.cursor()
+    try:
 
-    cursor.execute("""
-        SELECT
-            id,
-            customer_name,
-            product,
-            status
-        FROM deliveries
-        ORDER BY id
-    """)
+        response = requests.get(
+            f"{AI_SERVICE_URL}/predictions",
+            timeout=10
+        )
 
-    rows = cursor.fetchall()
+        response.raise_for_status()
 
-    cursor.close()
-    connection.close()
+        ai_result = response.json()
 
-    predictions = []
+        return {
+            "source": "ai-prediction-service",
+            "ai_service_url": AI_SERVICE_URL,
+            "count": ai_result.get("count", 0),
+            "predictions": ai_result.get("predictions", [])
+        }
 
-    for row in rows:
+    except requests.exceptions.RequestException as error:
 
-        delivery_id = row[0]
-        customer_name = row[1]
-        product = row[2]
-        status = row[3]
-
-        if status == "delivered":
-
-            risk = "LOW"
-            delay_probability = 0
-
-        elif status == "out_for_delivery":
-
-            risk = "LOW"
-            delay_probability = 10
-
-        elif status == "processing":
-
-            risk = "MEDIUM"
-            delay_probability = 30
-
-        else:
-
-            risk = "HIGH"
-            delay_probability = 50
-
-        predictions.append({
-            "delivery_id": delivery_id,
-            "customer_name": customer_name,
-            "product": product,
-            "status": status,
-            "risk": risk,
-            "delay_probability": delay_probability
-        })
-
-    return {
-        "count": len(predictions),
-        "predictions": predictions
-    }
+        return {
+            "source": "backend-fallback",
+            "ai_service_url": AI_SERVICE_URL,
+            "error": str(error),
+            "count": 0,
+            "predictions": []
+        }
