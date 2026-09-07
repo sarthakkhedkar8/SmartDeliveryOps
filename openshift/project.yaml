@@ -1,0 +1,8 @@
+apiVersion: project.openshift.io/v1
+kind: Project
+metadata:
+  name: smartdeliveryops
+  labels:
+    app: smartdeliveryops
+    project: final-year-project
+    managed-by: openshift
