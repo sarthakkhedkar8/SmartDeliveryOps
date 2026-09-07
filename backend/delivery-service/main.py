@@ -1,4 +1,5 @@
 import os
+import requests
 
 import psycopg2
 from dotenv import load_dotenv
@@ -10,6 +11,11 @@ from pydantic import BaseModel
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+
+AI_SERVICE_URL = os.getenv(
+    "AI_SERVICE_URL",
+    "http://ai-prediction-service:8002"
+)
 
 app = FastAPI(
     title="SmartDeliveryOps Delivery Service",
