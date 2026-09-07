@@ -1,243 +1,405 @@
 pipeline {
-
     agent any
 
     environment {
-        FRONTEND_IMAGE = "smartdeliveryops-frontend:latest"
-        BACKEND_IMAGE = "smartdeliveryops-backend:latest"
-        AI_IMAGE = "smartdeliveryops-ai-prediction:latest"
+        REGISTRY = "192.168.49.2:5000"
+
+        BACKEND_IMAGE = "192.168.49.2:5000/smartdeliveryops-backend"
+        FRONTEND_IMAGE = "192.168.49.2:5000/smartdeliveryops-frontend"
+        AI_IMAGE = "192.168.49.2:5000/smartdeliveryops-ai-prediction"
+
+        KUBECONFIG = "/var/lib/jenkins/.kube/config"
+        MINIKUBE_HOME = "/var/lib/jenkins/.minikube"
+        MINIKUBE_PROFILE = "minikube"
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('01 - Checkout') {
             steps {
-                echo 'Checking out SmartDeliveryOps source code...'
-
                 checkout scm
             }
         }
 
-        stage('Project Info') {
+        stage('02 - Project Info') {
             steps {
                 sh '''
-                    echo "========================================="
-                    echo " SmartDeliveryOps CI/CD Pipeline"
-                    echo "========================================="
+                    echo "======================================"
+                    echo " SmartDeliveryOps CI/CD"
+                    echo " Build: ${BUILD_NUMBER}"
+                    echo " Branch: ${BRANCH_NAME:-main}"
+                    echo "======================================"
 
-                    echo "Git Commit:"
-                    git log -1 --oneline
-
-                    echo "Git Branch:"
-                    git branch --show-current
-
-                    echo "Python:"
-                    python3 --version
-
-                    echo "Node:"
-                    node --version
-
-                    echo "NPM:"
-                    npm --version
-
-                    echo "Docker:"
-                    docker --version
-
-                    echo "Docker Compose:"
-                    docker compose version
+                    git rev-parse --short HEAD
+                    git status --short
                 '''
             }
         }
 
-        stage('Backend Test') {
+        stage('03 - Backend Validation') {
             steps {
-                echo 'Running backend validation...'
-
                 sh '''
+                    set -e
+
+                    cd backend/delivery-service
+
                     echo "Checking backend files..."
 
-                    test -f backend/delivery-service/main.py
-                    test -f backend/delivery-service/requirements.txt
-                    test -f backend/delivery-service/Dockerfile
+                    test -f main.py
+                    test -f requirements.txt
+                    test -f Dockerfile
 
-                    python3 --version
+                    python3 -m py_compile main.py
 
-                    echo "Backend files validated successfully."
+                    echo "Backend validation PASSED"
                 '''
             }
         }
 
-        stage('AI Service Test') {
+        stage('04 - AI Validation') {
             steps {
-                echo 'Running AI service validation...'
-
                 sh '''
-                    echo "Checking AI service files..."
+                    set -e
 
-                    test -f ai-agents/delivery-prediction-agent/agent.py
-                    test -f ai-agents/delivery-prediction-agent/api.py
-                    test -f ai-agents/delivery-prediction-agent/requirements.txt
-                    test -f ai-agents/delivery-prediction-agent/Dockerfile
+                    cd ai-agents/delivery-prediction-agent
 
-                    echo "AI service files validated successfully."
+                    echo "Checking AI agent files..."
+
+                    test -f agent.py
+                    test -f api.py
+                    test -f requirements.txt
+                    test -f Dockerfile
+
+                    python3 -m py_compile agent.py
+                    python3 -m py_compile api.py
+
+                    echo "AI validation PASSED"
                 '''
             }
         }
 
-        stage('Frontend Test') {
+        stage('05 - Frontend Validation') {
             steps {
-                echo 'Building frontend...'
+                sh '''
+                    set -e
 
-                dir('frontend') {
-                    sh '''
-                        echo "Node version:"
-                        node --version
+                    cd frontend
 
-                        echo "NPM version:"
-                        npm --version
+                    test -f package.json
+                    test -f package-lock.json
+                    test -f Dockerfile
 
-                        echo "Installing frontend dependencies..."
-                        npm install
+                    echo "Installing frontend dependencies..."
+                    npm ci
 
-                        echo "Running frontend production build..."
-                        npm run build
+                    echo "Building frontend..."
+                    npm run build
 
-                        echo "Frontend build successful."
-                    '''
-                }
+                    echo "Frontend validation PASSED"
+                '''
             }
         }
 
-        stage('Build Backend Docker Image') {
+        stage('06 - Docker Build') {
             steps {
-                echo 'Building backend Docker image...'
-
                 sh '''
+                    set -e
+
+                    echo "Building Backend image..."
                     docker build \
-                      -t ${BACKEND_IMAGE} \
-                      ./backend/delivery-service
+                        -t ${BACKEND_IMAGE}:build-${BUILD_NUMBER} \
+                        backend/delivery-service
 
-                    echo "Backend Docker image created successfully."
-                '''
-            }
-        }
-
-        stage('Build Frontend Docker Image') {
-            steps {
-                echo 'Building frontend Docker image...'
-
-                sh '''
+                    echo "Building Frontend image..."
                     docker build \
-                      -t ${FRONTEND_IMAGE} \
-                      ./frontend
+                        -t ${FRONTEND_IMAGE}:build-${BUILD_NUMBER} \
+                        frontend
 
-                    echo "Frontend Docker image created successfully."
-                '''
-            }
-        }
-
-        stage('Build AI Docker Image') {
-            steps {
-                echo 'Building AI prediction Docker image...'
-
-                sh '''
+                    echo "Building AI image..."
                     docker build \
-                      -t ${AI_IMAGE} \
-                      ./ai-agents/delivery-prediction-agent
+                        -t ${AI_IMAGE}:build-${BUILD_NUMBER} \
+                        ai-agents/delivery-prediction-agent
 
-                    echo "AI Docker image created successfully."
+                    echo "Docker builds PASSED"
                 '''
             }
         }
 
-        stage('Docker Images') {
+        stage('07 - Docker Registry Push') {
             steps {
-                echo 'Checking Docker images...'
-
                 sh '''
-                    echo "========================================="
-                    echo " SmartDeliveryOps Docker Images"
-                    echo "========================================="
+                    set -e
 
-                    docker images | grep smartdeliveryops || true
+                    echo "Pushing Backend..."
+                    docker push ${BACKEND_IMAGE}:build-${BUILD_NUMBER}
+
+                    echo "Pushing Frontend..."
+                    docker push ${FRONTEND_IMAGE}:build-${BUILD_NUMBER}
+
+                    echo "Pushing AI..."
+                    docker push ${AI_IMAGE}:build-${BUILD_NUMBER}
+
+                    echo "All images pushed successfully."
                 '''
             }
         }
 
-        stage('Deploy') {
+        stage('08 - Registry Verification') {
             steps {
-                echo 'Deploying SmartDeliveryOps...'
-
                 sh '''
-                    echo "Using SmartDeliveryOps Compose project..."
+                    set -e
 
-                    docker compose \
-                      -p smartdeliveryops \
-                      up -d --force-recreate
+                    echo "Registry repositories:"
+                    curl -fsS http://${REGISTRY}/v2/_catalog
 
-                    echo "Deployment command completed."
+                    echo
+                    echo "Backend tags:"
+                    curl -fsS http://${REGISTRY}/v2/smartdeliveryops-backend/tags/list
+
+                    echo
+                    echo "Frontend tags:"
+                    curl -fsS http://${REGISTRY}/v2/smartdeliveryops-frontend/tags/list
+
+                    echo
+                    echo "AI tags:"
+                    curl -fsS http://${REGISTRY}/v2/smartdeliveryops-ai-prediction/tags/list
+
+                    echo
+                    echo "Registry verification PASSED"
                 '''
             }
         }
 
-        stage('Health Check') {
+        stage('09 - Kubernetes Connectivity') {
             steps {
-                echo 'Checking SmartDeliveryOps services...'
-
                 sh '''
-                    echo "Waiting for services to start..."
-                    sleep 10
+                    set -e
 
-                    echo ""
-                    echo "========================================="
-                    echo " Backend Health Check"
-                    echo "========================================="
+                    echo "Kubernetes context:"
+                    kubectl config current-context
 
-                    curl -f http://localhost:8001/health
+                    echo
+                    echo "Kubernetes nodes:"
+                    kubectl get nodes
 
-                    echo ""
-                    echo "Backend is healthy."
-
-                    echo ""
-                    echo "========================================="
-                    echo " AI Service Health Check"
-                    echo "========================================="
-
-                    curl -f http://localhost:8002/health
-
-                    echo ""
-                    echo "AI service is healthy."
-
-                    echo ""
-                    echo "========================================="
-                    echo " Frontend Health Check"
-                    echo "========================================="
-
-                    curl -f http://localhost:5173
-
-                    echo ""
-                    echo "Frontend is healthy."
-
-                    echo ""
-                    echo "========================================="
-                    echo " SmartDeliveryOps deployment successful!"
-                    echo "========================================="
+                    echo
+                    echo "Kubernetes connectivity PASSED"
                 '''
             }
         }
 
-        stage('Final Container Check') {
+        stage('10 - Deploy PostgreSQL') {
             steps {
-                echo 'Checking running containers...'
-
                 sh '''
-                    echo "========================================="
-                    echo " Running SmartDeliveryOps Containers"
-                    echo "========================================="
+                    set -e
 
-                    docker ps \
-                      --filter "name=smartdeliveryops" \
-                      --format "table {{.Names}}\\t{{.Status}}\\t{{.Ports}}"
+                    kubectl apply -f kubernetes/postgres-secret.yaml
+                    kubectl apply -f kubernetes/postgres-pvc.yaml
+                    kubectl apply -f kubernetes/postgres-deployment.yaml
+                    kubectl apply -f kubernetes/postgres-service.yaml
+
+                    kubectl rollout status deployment/postgres --timeout=180s
+
+                    echo "PostgreSQL deployment PASSED"
+                '''
+            }
+        }
+
+        stage('11 - Deploy Backend') {
+            steps {
+                sh '''
+                    set -e
+
+                    kubectl apply -f kubernetes/backend-service.yaml
+
+                    kubectl set image deployment/backend \
+                        backend=${BACKEND_IMAGE}:build-${BUILD_NUMBER}
+
+                    kubectl rollout status deployment/backend --timeout=180s
+
+                    echo "Backend deployment PASSED"
+                '''
+            }
+        }
+
+        stage('12 - Deploy Frontend') {
+            steps {
+                sh '''
+                    set -e
+
+                    kubectl apply -f kubernetes/frontend-service.yaml
+
+                    kubectl set image deployment/frontend \
+                        frontend=${FRONTEND_IMAGE}:build-${BUILD_NUMBER}
+
+                    kubectl rollout status deployment/frontend --timeout=180s
+
+                    echo "Frontend deployment PASSED"
+                '''
+            }
+        }
+
+        stage('13 - Deploy AI Image') {
+            steps {
+                sh '''
+                    set -e
+
+                    echo "AI image is available in registry:"
+                    curl -fsS \
+                        http://${REGISTRY}/v2/smartdeliveryops-ai-prediction/tags/list
+
+                    echo
+                    echo "AI image push verification PASSED"
+                    echo "Dedicated AI Kubernetes Deployment will be added in next architecture step."
+                '''
+            }
+        }
+
+        stage('14 - Kubernetes Status') {
+            steps {
+                sh '''
+                    echo "======================================"
+                    echo " Kubernetes Deployments"
+                    echo "======================================"
+
+                    kubectl get deployments -o wide
+
+                    echo
+                    echo "======================================"
+                    echo " Kubernetes Pods"
+                    echo "======================================"
+
+                    kubectl get pods -o wide
+
+                    echo
+                    echo "======================================"
+                    echo " Kubernetes Services"
+                    echo "======================================"
+
+                    kubectl get services
+                '''
+            }
+        }
+
+        stage('15 - Backend Health Check') {
+            steps {
+                sh '''
+                    set -e
+
+                    echo "Waiting for backend..."
+
+                    sleep 5
+
+                    BACKEND_POD=$(kubectl get pods \
+                        -l app=backend \
+                        -o jsonpath='{.items[0].metadata.name}')
+
+                    echo "Backend pod: ${BACKEND_POD}"
+
+                    kubectl exec ${BACKEND_POD} -- \
+                        python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8001/health').read().decode())"
+
+                    echo "Backend health check PASSED"
+                '''
+            }
+        }
+
+        stage('16 - Database Verification') {
+            steps {
+                sh '''
+                    set -e
+
+                    BACKEND_POD=$(kubectl get pods \
+                        -l app=backend \
+                        -o jsonpath='{.items[0].metadata.name}')
+
+                    echo "Testing database through backend..."
+
+                    kubectl exec ${BACKEND_POD} -- \
+                        python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8001/deliveries').read().decode())"
+
+                    echo
+                    echo "Database verification PASSED"
+                '''
+            }
+        }
+
+        stage('17 - AI Prediction Verification') {
+            steps {
+                sh '''
+                    set -e
+
+                    BACKEND_POD=$(kubectl get pods \
+                        -l app=backend \
+                        -o jsonpath='{.items[0].metadata.name}')
+
+                    echo "Testing AI prediction endpoint..."
+
+                    kubectl exec ${BACKEND_POD} -- \
+                        python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8001/ai/predictions').read().decode())"
+
+                    echo
+                    echo "AI prediction verification PASSED"
+                '''
+            }
+        }
+
+        stage('18 - Frontend Verification') {
+            steps {
+                sh '''
+                    set -e
+
+                    FRONTEND_POD=$(kubectl get pods \
+                        -l app=frontend \
+                        -o jsonpath='{.items[0].metadata.name}')
+
+                    echo "Frontend pod: ${FRONTEND_POD}"
+
+                    kubectl exec ${FRONTEND_POD} -- \
+                        wget -qO- http://127.0.0.1:5173/ | head -20
+
+                    echo
+                    echo "Frontend verification PASSED"
+                '''
+            }
+        }
+
+        stage('19 - Final Deployment Summary') {
+            steps {
+                sh '''
+                    echo
+                    echo "=============================================="
+                    echo " SMARTDELIVERYOPS DEPLOYMENT SUCCESS"
+                    echo "=============================================="
+
+                    echo
+                    echo "Build Number:"
+                    echo "${BUILD_NUMBER}"
+
+                    echo
+                    echo "Backend Image:"
+                    echo "${BACKEND_IMAGE}:build-${BUILD_NUMBER}"
+
+                    echo
+                    echo "Frontend Image:"
+                    echo "${FRONTEND_IMAGE}:build-${BUILD_NUMBER}"
+
+                    echo
+                    echo "AI Image:"
+                    echo "${AI_IMAGE}:build-${BUILD_NUMBER}"
+
+                    echo
+                    echo "Kubernetes:"
+                    kubectl get deployments
+
+                    echo
+                    kubectl get pods
+
+                    echo
+                    kubectl get services
+
+                    echo
+                    echo "=============================================="
                 '''
             }
         }
@@ -246,43 +408,20 @@ pipeline {
     post {
 
         success {
-            echo '''
-=========================================
- CI/CD PIPELINE SUCCESSFUL
-=========================================
- SmartDeliveryOps has been successfully
- built, deployed and health-checked.
-=========================================
-'''
+            echo "SmartDeliveryOps CI/CD pipeline completed successfully."
         }
 
         failure {
-            echo '''
-=========================================
- CI/CD PIPELINE FAILED
-=========================================
-Please check the Jenkins Console Output
-for the failed stage and error.
-=========================================
-'''
+            echo "SmartDeliveryOps CI/CD pipeline FAILED."
+            sh '''
+                echo "===== FAILED BUILD DEBUG ====="
+                kubectl get pods -o wide || true
+                kubectl get events --sort-by=.lastTimestamp | tail -30 || true
+            '''
         }
 
         always {
-            sh '''
-                echo ""
-                echo "========================================="
-                echo " Docker Containers After Pipeline"
-                echo "========================================="
-
-                docker ps \
-                  --filter "name=smartdeliveryops" \
-                  --format "table {{.Names}}\\t{{.Image}}\\t{{.Status}}\\t{{.Ports}}" || true
-
-                echo ""
-                echo "========================================="
-                echo " Pipeline Finished"
-                echo "========================================="
-            '''
+            echo "Pipeline finished: ${currentBuild.currentResult}"
         }
     }
 }

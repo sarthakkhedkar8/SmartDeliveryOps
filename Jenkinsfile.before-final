@@ -1,0 +1,614 @@
+pipeline {
+
+    agent any
+
+    environment {
+        FRONTEND_IMAGE = "smartdeliveryops-frontend:latest"
+        BACKEND_IMAGE = "smartdeliveryops-backend:latest"
+        AI_IMAGE = "smartdeliveryops-ai-prediction:latest"
+
+        KUBECONFIG = "/var/lib/jenkins/.kube/config"
+        MINIKUBE_HOME = "/var/lib/jenkins/.minikube"
+        MINIKUBE_PROFILE = "minikube"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                echo 'Checking out SmartDeliveryOps source code...'
+
+                checkout scm
+            }
+        }
+
+        stage('Project Info') {
+            steps {
+                echo 'Checking project environment...'
+
+                sh '''
+                    echo "========================================="
+                    echo " SmartDeliveryOps CI/CD Pipeline"
+                    echo " Kubernetes Deployment"
+                    echo "========================================="
+
+                    echo ""
+                    echo "Git Commit:"
+                    git log -1 --oneline
+
+                    echo ""
+                    echo "Git Branch:"
+                    git branch --show-current
+
+                    echo ""
+                    echo "Python:"
+                    python3 --version
+
+                    echo ""
+                    echo "Node:"
+                    node --version
+
+                    echo ""
+                    echo "NPM:"
+                    npm --version
+
+                    echo ""
+                    echo "Docker:"
+                    docker --version
+
+                    echo ""
+                    echo "Kubectl:"
+                    kubectl version --client
+
+                    echo ""
+                    echo "Kubernetes Nodes:"
+                    kubectl get nodes
+
+                    echo ""
+                    echo "========================================="
+                '''
+            }
+        }
+
+        stage('Backend Test') {
+            steps {
+                echo 'Validating backend...'
+
+                sh '''
+                    test -f backend/delivery-service/main.py
+                    test -f backend/delivery-service/requirements.txt
+                    test -f backend/delivery-service/Dockerfile
+
+                    echo "Backend validation successful."
+                '''
+            }
+        }
+
+        stage('AI Service Test') {
+            steps {
+                echo 'Validating AI service...'
+
+                sh '''
+                    test -f ai-agents/delivery-prediction-agent/agent.py
+                    test -f ai-agents/delivery-prediction-agent/api.py
+                    test -f ai-agents/delivery-prediction-agent/requirements.txt
+                    test -f ai-agents/delivery-prediction-agent/Dockerfile
+
+                    echo "AI service validation successful."
+                '''
+            }
+        }
+
+        stage('Frontend Test') {
+            steps {
+                echo 'Building frontend...'
+
+                dir('frontend') {
+                    sh '''
+                        echo "Node:"
+                        node --version
+
+                        echo "NPM:"
+                        npm --version
+
+                        echo "Installing dependencies..."
+
+                        npm install
+
+                        echo "Building frontend..."
+
+                        npm run build
+
+                        echo "Frontend build successful."
+                    '''
+                }
+            }
+        }
+
+        stage('Build Backend Docker Image') {
+            steps {
+                echo 'Building backend Docker image...'
+
+                sh '''
+                    docker build \
+                        -t ${BACKEND_IMAGE} \
+                        ./backend/delivery-service
+
+                    echo ""
+                    echo "Backend image built successfully."
+                '''
+            }
+        }
+
+        stage('Build Frontend Docker Image') {
+            steps {
+                echo 'Building frontend Docker image...'
+
+                sh '''
+                    docker build \
+                        -t ${FRONTEND_IMAGE} \
+                        ./frontend
+
+                    echo ""
+                    echo "Frontend image built successfully."
+                '''
+            }
+        }
+
+        stage('Build AI Docker Image') {
+            steps {
+                echo 'Building AI prediction Docker image...'
+
+                sh '''
+                    docker build \
+                        -t ${AI_IMAGE} \
+                        ./ai-agents/delivery-prediction-agent
+
+                    echo ""
+                    echo "AI prediction image built successfully."
+                '''
+            }
+        }
+
+        stage('Docker Image Verification') {
+            steps {
+                echo 'Verifying Docker images...'
+
+                sh '''
+                    echo "========================================="
+                    echo " SmartDeliveryOps Docker Images"
+                    echo "========================================="
+
+                    docker images --format "{{.Repository}}:{{.Tag}}" | \
+                        grep smartdeliveryops || true
+
+                    echo ""
+                    echo "Docker image verification completed."
+                '''
+            }
+        }
+
+        stage('Kubernetes Access Check') {
+            steps {
+                echo 'Checking Kubernetes access from Jenkins...'
+
+                sh '''
+                    echo "========================================="
+                    echo " Kubernetes Access"
+                    echo "========================================="
+
+                    kubectl get nodes
+
+                    echo ""
+                    echo "Current Kubernetes context:"
+
+                    kubectl config current-context
+
+                    echo ""
+                    echo "Kubernetes access successful."
+                '''
+            }
+        }
+
+        stage('Minikube Image Verification') {
+            steps {
+                echo 'Checking images inside Minikube containerd...'
+
+                sh '''
+                    echo "========================================="
+                    echo " Minikube containerd Images"
+                    echo "========================================="
+
+                    docker exec minikube \
+                        ctr -n k8s.io images list | \
+                        grep smartdeliveryops || true
+
+                    echo ""
+                    echo "Checking backend image..."
+
+                    docker exec minikube \
+                        ctr -n k8s.io images list | \
+                        grep "smartdeliveryops-backend:latest"
+
+                    echo ""
+                    echo "Checking frontend image..."
+
+                    docker exec minikube \
+                        ctr -n k8s.io images list | \
+                        grep "smartdeliveryops-frontend:latest"
+
+                    echo ""
+                    echo "Minikube image verification successful."
+                '''
+            }
+        }
+
+        stage('Kubernetes Manifest Validation') {
+            steps {
+                echo 'Validating Kubernetes manifests...'
+
+                sh '''
+                    echo "Validating PostgreSQL secret..."
+
+                    kubectl apply \
+                        --dry-run=client \
+                        -f kubernetes/postgres-secret.yaml
+
+                    echo "Validating PostgreSQL PVC..."
+
+                    kubectl apply \
+                        --dry-run=client \
+                        -f kubernetes/postgres-pvc.yaml
+
+                    echo "Validating PostgreSQL deployment..."
+
+                    kubectl apply \
+                        --dry-run=client \
+                        -f kubernetes/postgres-deployment.yaml
+
+                    echo "Validating PostgreSQL service..."
+
+                    kubectl apply \
+                        --dry-run=client \
+                        -f kubernetes/postgres-service.yaml
+
+                    echo "Validating backend deployment..."
+
+                    kubectl apply \
+                        --dry-run=client \
+                        -f kubernetes/backend-deployment.yaml
+
+                    echo "Validating backend service..."
+
+                    kubectl apply \
+                        --dry-run=client \
+                        -f kubernetes/backend-service.yaml
+
+                    echo "Validating frontend deployment..."
+
+                    kubectl apply \
+                        --dry-run=client \
+                        -f kubernetes/frontend-deployment.yaml
+
+                    echo "Validating frontend service..."
+
+                    kubectl apply \
+                        --dry-run=client \
+                        -f kubernetes/frontend-service.yaml
+
+                    echo ""
+                    echo "All Kubernetes manifests are valid."
+                '''
+            }
+        }
+
+        stage('Deploy PostgreSQL') {
+            steps {
+                echo 'Deploying PostgreSQL...'
+
+                sh '''
+                    kubectl apply -f kubernetes/postgres-secret.yaml
+
+                    kubectl apply -f kubernetes/postgres-pvc.yaml
+
+                    kubectl apply -f kubernetes/postgres-deployment.yaml
+
+                    kubectl apply -f kubernetes/postgres-service.yaml
+
+                    echo ""
+                    echo "PostgreSQL deployed successfully."
+                '''
+            }
+        }
+
+        stage('Deploy Backend') {
+            steps {
+                echo 'Deploying backend...'
+
+                sh '''
+                    kubectl apply -f kubernetes/backend-deployment.yaml
+
+                    kubectl apply -f kubernetes/backend-service.yaml
+
+                    echo ""
+                    echo "Backend deployed successfully."
+                '''
+            }
+        }
+
+        stage('Deploy Frontend') {
+            steps {
+                echo 'Deploying frontend...'
+
+                sh '''
+                    kubectl apply -f kubernetes/frontend-deployment.yaml
+
+                    kubectl apply -f kubernetes/frontend-service.yaml
+
+                    echo ""
+                    echo "Frontend deployed successfully."
+                '''
+            }
+        }
+
+        stage('Wait for PostgreSQL') {
+            steps {
+                echo 'Waiting for PostgreSQL...'
+
+                sh '''
+                    kubectl rollout status \
+                        deployment/postgres \
+                        --timeout=180s
+
+                    echo "PostgreSQL is ready."
+                '''
+            }
+        }
+
+        stage('Wait for Backend') {
+            steps {
+                echo 'Waiting for backend...'
+
+                sh '''
+                    kubectl rollout status \
+                        deployment/backend \
+                        --timeout=180s
+
+                    echo "Backend is ready."
+                '''
+            }
+        }
+
+        stage('Wait for Frontend') {
+            steps {
+                echo 'Waiting for frontend...'
+
+                sh '''
+                    kubectl rollout status \
+                        deployment/frontend \
+                        --timeout=180s
+
+                    echo "Frontend is ready."
+                '''
+            }
+        }
+
+        stage('Kubernetes Status') {
+            steps {
+                echo 'Checking Kubernetes resources...'
+
+                sh '''
+                    echo ""
+                    echo "========================================="
+                    echo " Kubernetes Pods"
+                    echo "========================================="
+
+                    kubectl get pods -o wide
+
+                    echo ""
+                    echo "========================================="
+                    echo " Kubernetes Services"
+                    echo "========================================="
+
+                    kubectl get services
+
+                    echo ""
+                    echo "========================================="
+                    echo " Kubernetes Deployments"
+                    echo "========================================="
+
+                    kubectl get deployments
+
+                    echo ""
+                    echo "========================================="
+                    echo " PostgreSQL PVC"
+                    echo "========================================="
+
+                    kubectl get pvc
+                '''
+            }
+        }
+
+        stage('Backend Health Check') {
+            steps {
+                echo 'Checking backend health...'
+
+                sh '''
+                    echo "Calling backend /health..."
+
+                    kubectl exec deployment/backend -- \
+                        python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8001/health').read().decode())"
+
+                    echo ""
+                    echo "Backend health check successful."
+                '''
+            }
+        }
+
+        stage('Backend Delivery API Check') {
+            steps {
+                echo 'Checking delivery API...'
+
+                sh '''
+                    echo "Calling /deliveries..."
+
+                    kubectl exec deployment/backend -- \
+                        python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8001/deliveries').read().decode())"
+
+                    echo ""
+                    echo "Delivery API check successful."
+                '''
+            }
+        }
+
+        stage('AI Prediction API Check') {
+            steps {
+                echo 'Checking AI prediction API...'
+
+                sh '''
+                    echo "Calling /ai/predictions..."
+
+                    kubectl exec deployment/backend -- \
+                        python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8001/ai/predictions').read().decode())"
+
+                    echo ""
+                    echo "AI prediction API check successful."
+                '''
+            }
+        }
+
+        stage('Frontend Health Check') {
+            steps {
+                echo 'Checking frontend...'
+
+                sh '''
+                    kubectl exec deployment/frontend -- \
+                        wget -qO- http://localhost:5173/ > /tmp/frontend-health.html
+
+                    test -s /tmp/frontend-health.html
+
+                    echo "Frontend health check successful."
+                '''
+            }
+        }
+
+        stage('Final Verification') {
+            steps {
+                echo 'Running final verification...'
+
+                sh '''
+                    echo ""
+                    echo "========================================="
+                    echo " FINAL SMARTDELIVERYOPS VERIFICATION"
+                    echo "========================================="
+
+                    echo ""
+                    echo "----- Kubernetes Nodes -----"
+
+                    kubectl get nodes
+
+                    echo ""
+                    echo "----- Pods -----"
+
+                    kubectl get pods
+
+                    echo ""
+                    echo "----- Services -----"
+
+                    kubectl get services
+
+                    echo ""
+                    echo "----- Deployments -----"
+
+                    kubectl get deployments
+
+                    echo ""
+                    echo "----- PVC -----"
+
+                    kubectl get pvc
+
+                    echo ""
+                    echo "========================================="
+                    echo " SMARTDELIVERYOPS DEPLOYMENT SUCCESSFUL"
+                    echo "========================================="
+                '''
+            }
+        }
+    }
+
+    post {
+
+        success {
+            echo '''
+=========================================
+ CI/CD PIPELINE SUCCESSFUL
+=========================================
+
+SmartDeliveryOps has been successfully:
+
+1. Checked out from Git
+2. Backend validated
+3. AI service validated
+4. Frontend built
+5. Docker images built
+6. Kubernetes access verified
+7. Minikube images verified
+8. Kubernetes manifests validated
+9. PostgreSQL deployed
+10. Backend deployed
+11. Frontend deployed
+12. Kubernetes rollouts verified
+13. Backend health verified
+14. Delivery API verified
+15. AI prediction API verified
+16. Frontend verified
+
+=========================================
+ SmartDeliveryOps Kubernetes Deployment
+                 SUCCESS
+=========================================
+'''
+        }
+
+        failure {
+            echo '''
+=========================================
+ CI/CD PIPELINE FAILED
+=========================================
+
+Check the Jenkins Console Output
+for the failed stage.
+
+=========================================
+'''
+        }
+
+        always {
+            sh '''
+                echo ""
+                echo "========================================="
+                echo " FINAL KUBERNETES STATUS"
+                echo "========================================="
+
+                kubectl get pods || true
+
+                echo ""
+
+                kubectl get services || true
+
+                echo ""
+
+                kubectl get deployments || true
+
+                echo ""
+
+                kubectl get pvc || true
+
+                echo ""
+                echo "========================================="
+                echo " Pipeline Finished"
+                echo "========================================="
+            '''
+        }
+    }
+}
