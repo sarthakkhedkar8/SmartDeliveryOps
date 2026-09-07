@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 
-const API_URL = "http://localhost:8001";
+const API_URL = "/api";
 
 function App() {
   const [deliveries, setDeliveries] = useState([]);
