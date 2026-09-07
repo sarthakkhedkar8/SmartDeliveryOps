@@ -19,3 +19,6 @@ frontend/src/*.backup
 *.day15.backup
 frontend/src/*.day16.backup
 backend/delivery-service/*.day16.backup
+terraform/.terraform/
+*.tfstate.backup
+*.tfstate
