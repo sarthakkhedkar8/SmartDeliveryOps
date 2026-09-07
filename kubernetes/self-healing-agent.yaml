@@ -1,0 +1,134 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: self-healing-agent
+  namespace: default
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: self-healing-agent
+  namespace: default
+rules:
+
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+      - deployments/status
+    verbs:
+      - get
+      - list
+      - watch
+      - patch
+      - update
+
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: self-healing-agent
+  namespace: default
+subjects:
+
+  - kind: ServiceAccount
+    name: self-healing-agent
+    namespace: default
+
+roleRef:
+  kind: Role
+  name: self-healing-agent
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: self-healing-agent
+  namespace: default
+  labels:
+    app: self-healing-agent
+spec:
+
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: self-healing-agent
+
+  template:
+    metadata:
+      labels:
+        app: self-healing-agent
+
+    spec:
+
+      serviceAccountName: self-healing-agent
+
+      containers:
+
+        - name: self-healing-agent
+
+          image: 192.168.49.2:5000/smartdeliveryops-self-healing:day17
+
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 8005
+
+          env:
+            - name: NAMESPACE
+              value: "default"
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+
+            limits:
+              cpu: 200m
+              memory: 192Mi
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8005
+
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8005
+
+            initialDelaySeconds: 15
+            periodSeconds: 20
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: self-healing-service
+  namespace: default
+spec:
+
+  selector:
+    app: self-healing-agent
+
+  ports:
+
+    - port: 8005
+      targetPort: 8005
+
+  type: ClusterIP

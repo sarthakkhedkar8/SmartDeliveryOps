@@ -852,3 +852,217 @@ footer {
     font-size: 9px;
   }
 }
+
+/* ============================================================
+   DAY 17 - SYSTEM HEALTH
+   ============================================================ */
+
+.system-health-panel {
+  margin-bottom: 22px;
+}
+
+.health-badge {
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.health-badge.healthy {
+  background: #052e16;
+  color: #4ade80;
+}
+
+.health-badge.degraded {
+  background: #422006;
+  color: #fbbf24;
+}
+
+.health-badge.critical {
+  background: #450a0a;
+  color: #f87171;
+}
+
+.health-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px;
+}
+
+.health-card {
+  min-height: 105px;
+  padding: 16px;
+  border: 1px solid #26354a;
+  border-radius: 13px;
+  background: #0b1422;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.health-name {
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.health-card strong {
+  font-size: 12px;
+}
+
+.health-card small {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.health-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.health-dot.online {
+  background: #22c55e;
+  box-shadow: 0 0 12px #22c55e;
+}
+
+.health-dot.offline {
+  background: #ef4444;
+  box-shadow: 0 0 12px #ef4444;
+}
+
+.health-loading {
+  padding: 25px;
+  color: #64748b;
+}
+
+.health-summary {
+  padding: 0 18px 18px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .health-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 500px) {
+  .health-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ============================================================
+   DAY 17 - SYSTEM HEALTH
+   ============================================================ */
+
+.system-health-panel {
+  margin-bottom: 22px;
+}
+
+.health-badge {
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.health-badge.healthy {
+  background: #052e16;
+  color: #4ade80;
+}
+
+.health-badge.degraded {
+  background: #422006;
+  color: #fbbf24;
+}
+
+.health-badge.critical {
+  background: #450a0a;
+  color: #f87171;
+}
+
+.health-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px;
+}
+
+.health-card {
+  min-height: 105px;
+  padding: 16px;
+  border: 1px solid #26354a;
+  border-radius: 13px;
+  background: #0b1422;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.health-name {
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.health-card strong {
+  font-size: 12px;
+}
+
+.health-card small {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.health-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.health-dot.online {
+  background: #22c55e;
+  box-shadow: 0 0 12px #22c55e;
+}
+
+.health-dot.offline {
+  background: #ef4444;
+  box-shadow: 0 0 12px #ef4444;
+}
+
+.health-loading {
+  padding: 25px;
+  color: #64748b;
+}
+
+.health-summary {
+  padding: 0 18px 18px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .health-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 500px) {
+  .health-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

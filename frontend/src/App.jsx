@@ -7,6 +7,7 @@ function App() {
   const [predictions, setPredictions] = useState([]);
   const [orchestration, setOrchestration] = useState([]);
   const [agents, setAgents] = useState([]);
+  const [systemHealth, setSystemHealth] = useState(null);
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
   const [error, setError] = useState("");
@@ -45,10 +46,23 @@ function App() {
     }
   };
 
+  const loadSystemHealth = async () => {
+    try {
+      const response = await fetch(`${API_URL}/system/health`);
+
+      if (response.ok) {
+        const data = await response.json();
+        setSystemHealth(data);
+      }
+    } catch {
+      setSystemHealth(null);
+    }
+  };
+
   const loadAgents = async () => {
     try {
       const response = await fetch(
-        "http://localhost:8004/agents"
+        `${API_URL}/ai/agents`
       );
 
       if (response.ok) {
@@ -67,7 +81,7 @@ function App() {
       setError("");
 
       const response = await fetch(
-        "http://localhost:8004/orchestrate/all"
+        `${API_URL}/ai/orchestrate`
       );
 
       if (!response.ok) {
@@ -87,6 +101,22 @@ function App() {
   useEffect(() => {
     loadDashboard();
     loadAgents();
+    loadSystemHealth();
+
+    const healthTimer = setInterval(
+      loadSystemHealth,
+      15000
+    );
+
+    return () => clearInterval(healthTimer);
+    loadSystemHealth();
+
+    const healthTimer = setInterval(
+      loadSystemHealth,
+      15000
+    );
+
+    return () => clearInterval(healthTimer);
   }, []);
 
   const totalDeliveries = deliveries.length;
@@ -226,6 +256,88 @@ function App() {
               ? "AI ANALYZING..."
               : "▶ RUN AI ORCHESTRATOR"}
           </button>
+
+        </section>
+
+
+        <section className="panel system-health-panel">
+
+          <div className="panel-header">
+
+            <div>
+              <h2>🩺 Kubernetes System Health</h2>
+              <span>
+                Live microservice health monitoring
+              </span>
+            </div>
+
+            <div className={
+              systemHealth?.overall_status === "healthy"
+                ? "health-badge healthy"
+                : systemHealth?.overall_status === "degraded"
+                ? "health-badge degraded"
+                : "health-badge critical"
+            }>
+              {systemHealth?.overall_status
+                ? systemHealth.overall_status.toUpperCase()
+                : "CHECKING"}
+            </div>
+
+          </div>
+
+          <div className="health-grid">
+
+            {systemHealth?.services
+              ? Object.entries(systemHealth.services).map(
+                  ([name, service]) => (
+
+                    <div
+                      className="health-card"
+                      key={name}
+                    >
+
+                      <div className="health-name">
+                        {name.replace("_", " ").toUpperCase()}
+                      </div>
+
+                      <div className={
+                        service.status === "healthy"
+                          ? "health-dot online"
+                          : "health-dot offline"
+                      }>
+                      </div>
+
+                      <strong>
+                        {service.status.toUpperCase()}
+                      </strong>
+
+                      <small>
+                        HTTP {service.http_status || 0}
+                      </small>
+
+                    </div>
+
+                  )
+                )
+              : (
+                <div className="health-loading">
+                  Checking Kubernetes services...
+                </div>
+              )}
+
+          </div>
+
+          {systemHealth && (
+            <div className="health-summary">
+              Healthy services:
+              {" "}
+              <strong>
+                {systemHealth.healthy_services}
+              </strong>
+              {" / "}
+              {systemHealth.total_services}
+            </div>
+          )}
 
         </section>
 

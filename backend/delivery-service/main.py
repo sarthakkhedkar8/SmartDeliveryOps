@@ -12,6 +12,12 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+ORCHESTRATOR_URL = os.getenv(
+    "ORCHESTRATOR_URL",
+    "http://ai-orchestrator-service:8004"
+)
+
+
 AI_SERVICE_URL = os.getenv(
     "AI_SERVICE_URL",
     "http://ai-prediction-service:8002"
@@ -312,3 +318,142 @@ def get_ai_predictions():
             "count": 0,
             "predictions": []
         }
+
+
+# ============================================================
+# DAY 17 - AI ORCHESTRATOR INTEGRATION
+# ============================================================
+
+@app.get("/ai/agents")
+def get_ai_agents():
+
+    try:
+
+        response = requests.get(
+            f"{ORCHESTRATOR_URL}/agents",
+            timeout=30
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        return {
+            "source": "ai-orchestrator-service",
+            "orchestrator_url": ORCHESTRATOR_URL,
+            "count": data.get("count", 0),
+            "agents": data.get("agents", [])
+        }
+
+    except requests.exceptions.RequestException as error:
+
+        return {
+            "source": "backend-fallback",
+            "orchestrator_url": ORCHESTRATOR_URL,
+            "count": 0,
+            "agents": [],
+            "error": str(error)
+        }
+
+
+@app.get("/ai/orchestrate")
+def run_ai_orchestration():
+
+    try:
+
+        response = requests.get(
+            f"{ORCHESTRATOR_URL}/orchestrate/all",
+            timeout=600
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        return {
+            "source": "ai-orchestrator-service",
+            "orchestrator_url": ORCHESTRATOR_URL,
+            "status": data.get("status", "unknown"),
+            "delivery_count": data.get("delivery_count", 0),
+            "agent_count": data.get("agent_count", 0),
+            "results": data.get("results", [])
+        }
+
+    except requests.exceptions.RequestException as error:
+
+        return {
+            "source": "backend-fallback",
+            "orchestrator_url": ORCHESTRATOR_URL,
+            "status": "error",
+            "delivery_count": 0,
+            "agent_count": 0,
+            "results": [],
+            "error": str(error)
+        }
+
+
+# ============================================================
+# DAY 17 - SYSTEM HEALTH
+# ============================================================
+
+@app.get("/system/health")
+def system_health():
+
+    services = {
+        "backend": "http://backend-service:8001/health",
+        "ai_prediction": "http://ai-prediction-service:8002/health",
+        "ai_model": "http://ai-model-service:8003/health",
+        "ai_orchestrator": "http://ai-orchestrator-service:8004/health",
+    }
+
+    results = {}
+
+    for service_name, url in services.items():
+
+        try:
+
+            response = requests.get(
+                url,
+                timeout=10
+            )
+
+            response.raise_for_status()
+
+            data = response.json()
+
+            results[service_name] = {
+                "status": "healthy",
+                "http_status": response.status_code,
+                "details": data
+            }
+
+        except Exception as error:
+
+            results[service_name] = {
+                "status": "unhealthy",
+                "http_status": 0,
+                "error": str(error)
+            }
+
+    healthy = sum(
+        1
+        for item in results.values()
+        if item["status"] == "healthy"
+    )
+
+    total = len(results)
+
+    overall = (
+        "healthy"
+        if healthy == total
+        else "degraded"
+        if healthy > 0
+        else "critical"
+    )
+
+    return {
+        "overall_status": overall,
+        "healthy_services": healthy,
+        "total_services": total,
+        "services": results
+    }
