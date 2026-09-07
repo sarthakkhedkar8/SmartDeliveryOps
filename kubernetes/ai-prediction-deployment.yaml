@@ -18,6 +18,9 @@ spec:
         - name: ai-prediction
           image: 192.168.49.2:5000/smartdeliveryops-ai-prediction:build-8
           imagePullPolicy: IfNotPresent
+          env:
+            - name: DATABASE_URL
+              value: "postgresql://smartdelivery:[REDACTED-OLD-DB-PASSWORD]@postgres-service:5432/smartdeliveryops"
           ports:
             - containerPort: 8002
           readinessProbe:
