@@ -323,8 +323,26 @@ pipeline {
 
                     echo "Backend pod: ${BACKEND_POD}"
 
-                    kubectl exec ${BACKEND_POD} -- \
-                        python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8001/health').read().decode())"
+                    HEALTH_RESPONSE=$(kubectl exec ${BACKEND_POD} -- \
+                        python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8001/health').read().decode())")
+
+                    echo "Health response: ${HEALTH_RESPONSE}"
+
+                    if echo "${HEALTH_RESPONSE}" | grep -q '"status":"healthy"'; then
+                        echo "Backend status: HEALTHY"
+                    else
+                        echo "Backend status: UNHEALTHY"
+                        echo "Jenkins validation FAILED"
+                        false
+                    fi
+
+                    if echo "${HEALTH_RESPONSE}" | grep -q '"database":"connected"'; then
+                        echo "Database status: CONNECTED"
+                    else
+                        echo "Database status: DISCONNECTED"
+                        echo "Jenkins database validation FAILED"
+                        false
+                    fi
 
                     echo "Backend health check PASSED"
                 '''
@@ -342,10 +360,27 @@ pipeline {
 
                     echo "Testing database through backend..."
 
-                    kubectl exec ${BACKEND_POD} -- \
-                        python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8001/deliveries').read().decode())"
+                    DELIVERY_RESPONSE=$(kubectl exec ${BACKEND_POD} -- \
+                        python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8001/deliveries').read().decode())")
 
-                    echo
+                    echo "Deliveries response: ${DELIVERY_RESPONSE}"
+
+                    if echo "${DELIVERY_RESPONSE}" | grep -q '"count"'; then
+                        echo "Delivery count field: FOUND"
+                    else
+                        echo "Delivery count field: MISSING"
+                        echo "Database verification FAILED"
+                        false
+                    fi
+
+                    if echo "${DELIVERY_RESPONSE}" | grep -q '"deliveries"'; then
+                        echo "Deliveries field: FOUND"
+                    else
+                        echo "Deliveries field: MISSING"
+                        echo "Database verification FAILED"
+                        false
+                    fi
+
                     echo "Database verification PASSED"
                 '''
             }
