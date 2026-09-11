@@ -244,13 +244,40 @@ pipeline {
                 sh '''
                     set -e
 
-                    echo "AI image is available in registry:"
+                    echo "======================================"
+                    echo " AI Prediction Registry Verification"
+                    echo "======================================"
+
                     curl -fsS \
                         http://${REGISTRY}/v2/smartdeliveryops-ai-prediction/tags/list
 
                     echo
-                    echo "AI image push verification PASSED"
-                    echo "Dedicated AI Kubernetes Deployment will be added in next architecture step."
+                    echo "AI image verification PASSED"
+
+                    echo
+                    echo "======================================"
+                    echo " Deploy AI Prediction"
+                    echo "======================================"
+
+                    kubectl set image deployment/ai-prediction \
+                        ai-prediction=${AI_IMAGE}:build-${BUILD_NUMBER}
+
+                    kubectl rollout status \
+                        deployment/ai-prediction \
+                        --timeout=180s
+
+                    echo
+                    echo "AI Prediction deployment PASSED"
+
+                    echo
+                    echo "======================================"
+                    echo " Current AI Prediction Image"
+                    echo "======================================"
+
+                    kubectl get deployment ai-prediction \
+                        -o jsonpath='{.spec.template.spec.containers[0].image}'
+
+                    echo
                 '''
             }
         }
