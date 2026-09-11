@@ -109,14 +109,6 @@ function App() {
     );
 
     return () => clearInterval(healthTimer);
-    loadSystemHealth();
-
-    const healthTimer = setInterval(
-      loadSystemHealth,
-      15000
-    );
-
-    return () => clearInterval(healthTimer);
   }, []);
 
   const totalDeliveries = deliveries.length;
