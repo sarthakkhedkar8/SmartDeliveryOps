@@ -21,7 +21,7 @@ spec:
 
         - name: ai-orchestrator
 
-          image: 192.168.49.2:5000/smartdeliveryops-ai-orchestrator:day15
+          image: 192.168.49.1:5000/smartdeliveryops-ai-orchestrator:day15
 
           imagePullPolicy: Always
 

@@ -79,7 +79,7 @@ spec:
 
         - name: self-healing-agent
 
-          image: 192.168.49.2:5000/smartdeliveryops-self-healing:day17
+          image: 192.168.49.1:5000/smartdeliveryops-self-healing:day17
 
           imagePullPolicy: Always
 

@@ -20,7 +20,7 @@ spec:
       containers:
         - name: ai-model
 
-          image: 192.168.49.2:5000/smartdeliveryops-ai-model:day14
+          image: 192.168.49.1:5000/smartdeliveryops-ai-model:day14
 
           imagePullPolicy: Always
 

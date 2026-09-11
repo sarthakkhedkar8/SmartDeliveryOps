@@ -2,11 +2,11 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY = "192.168.49.2:5000"
+        REGISTRY = "192.168.49.1:5000"
 
-        BACKEND_IMAGE = "192.168.49.2:5000/smartdeliveryops-backend"
-        FRONTEND_IMAGE = "192.168.49.2:5000/smartdeliveryops-frontend"
-        AI_IMAGE = "192.168.49.2:5000/smartdeliveryops-ai-prediction"
+        BACKEND_IMAGE = "192.168.49.1:5000/smartdeliveryops-backend"
+        FRONTEND_IMAGE = "192.168.49.1:5000/smartdeliveryops-frontend"
+        AI_IMAGE = "192.168.49.1:5000/smartdeliveryops-ai-prediction"
 
         KUBECONFIG = "/var/lib/jenkins/.kube/config"
         MINIKUBE_HOME = "/var/lib/jenkins/.minikube"
